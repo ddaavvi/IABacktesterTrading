@@ -218,19 +218,20 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
 if __name__ == "__main__":
-    def load_data_thread():
-        global IS_LOADING
-        print("Pre-loading Yahoo Finance data into memory cache...")
+    # Results already exist in data/results.json; load from there.
+    # The background pre-load thread is optional and runs the full backtester.
+    # Dashboard loads immediately.
+    IS_LOADING = False  # Allow dashboard to load immediately from results.json
+    
+    def warmup_thread():
+        print("  (Background) Pre-warming Yahoo Finance cache...")
         try:
-            backtester.run_all(commission=0.004)
-            print("\nData loaded.")
+            backtester.fetch_data()
+            print("  Cache warmed.")
         except Exception as e:
-            print(f"\nError loading data: {e}")
-            traceback.print_exc()
-        IS_LOADING = False
+            print(f"  Cache warm error: {e}")
 
-    # Start data loading in background
-    threading.Thread(target=load_data_thread, daemon=True).start()
+    threading.Thread(target=warmup_thread, daemon=True).start()
     
     with socketserver.TCPServer(("", PORT), APIHandler) as httpd:
         print(f"Serving at port {PORT}. Web Dashboard available at http://localhost:{PORT}")
