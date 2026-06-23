@@ -15,6 +15,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const elStrategyCount = document.getElementById("strategy-count");
     const elNoSelectionState = document.getElementById("no-selection-state");
     const elDashboardState = document.getElementById("dashboard-state");
+
+    // ====== LIVE PRICES (v0.3) ======
+    const elLiveWatchlist = document.getElementById("live-price-watchlist");
+    let livePricesInterval = null;
+
+    // ====== ALERTS (v0.3) ======
+    let alerts = JSON.parse(localStorage.getItem("pineLabAlerts") || "[]");
+    const elAlertList = document.getElementById("alert-list");
+    const elAlertTicker = document.getElementById("alert-ticker");
+    const elAlertType = document.getElementById("alert-type");
+    const elAlertPrice = document.getElementById("alert-price");
+    const elBtnAddAlert = document.getElementById("btn-add-alert");
     
     // Header Elements
     const elStratRank = document.getElementById("strat-rank");
@@ -127,6 +139,143 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             showNoSelectionState(true);
         }
+
+        // Start real-time prices and init alerts
+        startLivePrices();
+        renderAlertList();
+    }
+
+    // ======================================================================
+    // 1b. LIVE PRICES WATCHLIST (v0.3)
+    // ======================================================================
+    async function fetchLivePrices() {
+        try {
+            const resp = await fetch("/api/live-prices");
+            if (!resp.ok) return;
+            const prices = await resp.json();
+            renderLiveWatchlist(prices);
+            checkAlerts(prices);
+        } catch (e) {
+            // Silent fail — will retry
+        }
+    }
+
+    function renderLiveWatchlist(prices) {
+        if (!elLiveWatchlist) return;
+        // Show a selection of key tickers sorted by change
+        const keyTickers = ["SPY", "QQQ", "DIA", "IWM", "EWG", "EWP", "VGK", "GLD", "^VIX"];
+        const previousPrices = JSON.parse(sessionStorage.getItem("pineLabPrevPrices") || "{}");
+        sessionStorage.setItem("pineLabPrevPrices", JSON.stringify(prices));
+
+        let html = "";
+        keyTickers.forEach(tk => {
+            const price = prices[tk];
+            if (!price) return;
+            const prev = previousPrices[tk] || price;
+            const change = price - prev;
+            const changePct = prev > 0 ? (change / prev * 100) : 0;
+            const cls = change > 0 ? "text-success" : (change < 0 ? "text-danger" : "");
+
+            // Friendly label
+            const labels = {"SPY":"S&P500", "QQQ":"Nasdaq", "DIA":"Dow", "IWM":"Russell",
+                           "EWG":"DE40", "EWP":"IBEX35", "VGK":"Europe",
+                           "GLD":"Gold", "^VIX":"VIX"};
+            html += `<div class="live-price-row ${cls}">
+                <span class="live-ticker">${labels[tk] || tk}</span>
+                <span class="live-price">$${price.toFixed(2)}</span>
+                <span class="live-change ${cls}">${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</span>
+            </div>`;
+        });
+        elLiveWatchlist.innerHTML = html;
+    }
+
+    function startLivePrices() {
+        fetchLivePrices(); // immediate
+        if (livePricesInterval) clearInterval(livePricesInterval);
+        livePricesInterval = setInterval(fetchLivePrices, 30000); // every 30s
+    }
+
+    // ======================================================================
+    // 1c. ALERTS SYSTEM (v0.3)
+    // ======================================================================
+    function addAlert(ticker, type, price) {
+        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        alerts.push({ id, ticker, type, price: parseFloat(price), created: new Date().toISOString() });
+        localStorage.setItem("pineLabAlerts", JSON.stringify(alerts));
+        renderAlertList();
+    }
+
+    function removeAlert(id) {
+        alerts = alerts.filter(a => a.id !== id);
+        localStorage.setItem("pineLabAlerts", JSON.stringify(alerts));
+        renderAlertList();
+    }
+
+    function renderAlertList() {
+        if (!elAlertList) return;
+        if (alerts.length === 0) {
+            elAlertList.innerHTML = `<div style="color:var(--text-muted);">Sin alertas activas.</div>`;
+            return;
+        }
+        let html = "";
+        alerts.forEach(a => {
+            const symbol = a.type === "above" ? ">" : (a.type === "below" ? "<" : "🔔");
+            html += `<div class="alert-item">
+                <span><strong>${a.ticker}</strong> ${symbol} ${a.type === 'signal' ? 'Señal' : '$' + a.price.toFixed(2)}</span>
+                <button class="alert-remove" data-id="${a.id}" style="background:none;border:none;color:var(--color-danger);cursor:pointer;">✕</button>
+            </div>`;
+        });
+        elAlertList.innerHTML = html;
+
+        // Wire remove buttons
+        elAlertList.querySelectorAll(".alert-remove").forEach(btn => {
+            btn.addEventListener("click", () => removeAlert(btn.dataset.id));
+        });
+    }
+
+    function checkAlerts(prices) {
+        if (!alerts.length) return;
+        const triggered = [];
+        alerts = alerts.filter(a => {
+            const price = prices[a.ticker];
+            if (!price) return true;
+            let fired = false;
+            if (a.type === "above" && price > a.price) fired = true;
+            else if (a.type === "below" && price < a.price) fired = true;
+            else if (a.type === "signal") {
+                // Signal alert: placeholder for future real-time signal logic
+                fired = false;
+            }
+            if (fired) {
+                triggered.push(a);
+                return false; // remove from active
+            }
+            return true;
+        });
+        if (triggered.length > 0) {
+            localStorage.setItem("pineLabAlerts", JSON.stringify(alerts));
+            renderAlertList();
+            // Show toast for each triggered alert
+            triggered.forEach(a => {
+                showToast(`🔔 Alerta ${a.ticker}: ${a.type === 'above' ? 'Superó' : 'Cayó bajo'} $${a.price.toFixed(2)}`);
+            });
+        }
+    }
+
+    // Wire alert button
+    if (elBtnAddAlert) {
+        elBtnAddAlert.addEventListener("click", () => {
+            const ticker = elAlertTicker.value;
+            const type = elAlertType.value;
+            const price = elAlertPrice.value;
+            if (type !== "signal" && (!price || parseFloat(price) <= 0)) {
+                showToast("⚠️ Introduce un precio válido");
+                return;
+            }
+            addAlert(ticker, type, type === "signal" ? 0 : price);
+            elAlertPrice.value = "";
+            showToast(`✅ Alerta creada para ${ticker}`);
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -667,14 +816,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // -------------------------------------------------------------------------
     // 8. Clipboard Utilities & UI Interactivity
     // -------------------------------------------------------------------------
+    // Use standalone showToast for alerts and other messages
+    function showToast(msg) {
+        elToastMessage.textContent = msg;
+        elToastMessage.classList.add("show");
+        setTimeout(() => {
+            elToastMessage.classList.remove("show");
+        }, 3000);
+    }
+
     elBtnCopyCode.addEventListener("click", () => {
         const code = elPineScriptCode.textContent;
         navigator.clipboard.writeText(code).then(() => {
-            // Show toast
-            elToastMessage.classList.add("show");
-            setTimeout(() => {
-                elToastMessage.classList.remove("show");
-            }, 3000);
+            showToast("Código copiado al portapapeles con éxito.");
         }).catch(err => {
             alert("No se pudo copiar el código: " + err);
         });

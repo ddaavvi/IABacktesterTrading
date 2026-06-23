@@ -1,21 +1,89 @@
+"""
+Delfos — Quant Strategy Backtester Engine v0.3
+===============================================
+
+Motor de simulación de estrategias de trading sobre +30 años de datos históricos.
+Soporta 20+ estrategias (simples y basadas en IA), stop loss dinámico,
+cálculo vectorizado de comisiones, y exportación a Pine Script v5.
+
+Activos disponibles (27): US stocks, ETFs, European region ETFs,
+gold, crypto proxy, volatility index.
+
+Dependencias: numpy, pandas, yfinance
+"""
+
 import os
 import json
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Any
 
 CACHE_DIR = ".data_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-TICKERS = ["SPY", "QQQ", "DIA", "IWM", "MCD", "KO", "MSFT", "GOOG", "V", "C", "XOM", "NU", "GLD", "IVE", "EWZ", "PBR", "BRK-B", "O"]
+# ---------------------------------------------------------------------------
+# ACTIVE TICKERS — 27 assets (US + Europe + Volatility + Treasuries)
+# ---------------------------------------------------------------------------
+# US Core:       SPY (S&P500), QQQ (Nasdaq100), DIA (Dow30), IWM (Russell2000)
+# US Megacaps:   MSFT, GOOG, V, BRK-B
+# US Dividends:  MCD, KO, O, XOM
+# US Financials: C
+# Emerging:      NU, EWZ, PBR
+# Gold/Value:    GLD, IVE
+# European ETFs: EWG (DE/Germany proxy DE40),
+#                EWP (ES/IBEX35 proxy),
+#                EWQ (FR/CAC40 proxy),
+#                EWU (UK/FTSE100 proxy),
+#                VGK (Vanguard FTSE Europe),
+#                IEUR (iShares Core MSCI Europe),
+#                EWL (Switzerland)
+# Volatility:    ^VIX
+# Treasuries:    TLT
+TICKERS = [
+    "SPY", "QQQ", "DIA", "IWM",          # US indices
+    "MSFT", "GOOG", "V", "BRK-B",        # US megacaps
+    "MCD", "KO", "O", "XOM",             # US dividend
+    "C", "NU",                            # Financials / LatAm
+    "EWZ", "PBR",                         # Brazil
+    "GLD", "IVE",                         # Gold / Value
+    "EWG", "EWP", "EWQ", "EWU",          # Europe country ETFs: DE, ES, FR, UK
+    "VGK", "IEUR", "EWL",                # Europe broad / Switzerland
+    "^VIX", "TLT"                         # Volatility / Treasuries
+]
+
+# Friendly names for the new tickers
+TICKER_DESCRIPTIONS = {
+    "EWG": "iShares MSCI Germany — proxy DE40",
+    "EWP": "iShares MSCI Spain — proxy IBEX35",
+    "EWQ": "iShares MSCI France — proxy CAC40",
+    "EWU": "iShares MSCI UK — proxy FTSE100",
+    "VGK": "Vanguard FTSE Europe",
+    "IEUR": "iShares Core MSCI Europe",
+    "EWL": "iShares MSCI Switzerland",
+    "^VIX": "CBOE Volatility Index",
+    "TLT": "iShares 20+ Year Treasury Bond",
+}
+
 START_DATE = "1996-01-01"
 END_DATE = datetime.today().strftime('%Y-%m-%d')
 
 # -------------------------------------------------------------------------
 # 1. Data Fetching
 # -------------------------------------------------------------------------
-def fetch_data():
+def fetch_data() -> Dict[str, pd.DataFrame]:
+    """Download and cache price history for all TICKERS from Yahoo Finance.
+
+    Uses CSV cache per ticker (configurable via YF_CACHE_SECONDS env var).
+    Pre-computes technical indicators used by all strategies:
+    SMA(20/50/200), STD_20, MFI(14), Donchian(33), RSI(14), ROC(3/5), RelVol.
+
+    Returns:
+        dict[ticker -> pd.DataFrame] with columns: Open, High, Low, Close,
+        Volume, SMA_20, STD_20, SMA_50, SMA_200, MFI_14, Donchian_33_High,
+        RSI_14, ROC_3, ROC_5, Vol_SMA20, RelVol
+    """
     data = {}
     for ticker in TICKERS:
         cache_path = os.path.join(CACHE_DIR, f"{ticker}.csv")
@@ -84,7 +152,26 @@ def fetch_data():
 # -------------------------------------------------------------------------
 # 2. Simulation Engine
 # -------------------------------------------------------------------------
-def run_simulation(signals_long, signals_exit, opens, closes, dates, initial_capital=10000.0, commission=0.004, stop_loss_pct=None):
+def run_simulation(signals_long: np.ndarray, signals_exit: np.ndarray,
+                   opens: np.ndarray, closes: np.ndarray, dates: pd.DatetimeIndex,
+                   initial_capital: float = 10000.0, commission: float = 0.004,
+                   stop_loss_pct: Optional[float] = None) -> Tuple[np.ndarray, list]:
+    """Run a vectorized trade simulation over price history.
+
+    Args:
+        signals_long: Boolean array — True = enter long position.
+        signals_exit: Boolean array — True = exit position.
+        opens: Array of open prices.
+        closes: Array of close prices.
+        dates: DatetimeIndex for the bars.
+        initial_capital: Starting capital in USD.
+        commission: Per-trade commission as decimal (0.004 = 0.4%).
+        stop_loss_pct: If set, exit when drawdown from entry exceeds this %.
+
+    Returns:
+        equity (np.ndarray): equity curve values.
+        trades (list[dict]): per-trade journal.
+    """
     n = len(closes)
     equity = np.full(n, float(initial_capital))
     cash   = float(initial_capital)
@@ -145,7 +232,16 @@ def run_simulation(signals_long, signals_exit, opens, closes, dates, initial_cap
 
     return equity, trades
 
-def compute_metrics(equity, trades, dates, initial_capital=10000.0):
+def compute_metrics(equity: np.ndarray, trades: list, dates: pd.DatetimeIndex,
+                    initial_capital: float = 10000.0):
+    """Compute performance metrics from an equity curve and trade log.
+
+    Calculates: total_return, CAGR, Sharpe, Sortino, Max Drawdown,
+    Win Rate, Profit Factor, avg trade duration.
+
+    Returns:
+        dict of metrics, equity_curve list for Chart.js
+    """
     equity_series = pd.Series(equity, index=dates)
     daily_ret = equity_series.pct_change().dropna()
     total_return = (equity[-1] / initial_capital - 1.0) * 100.0
@@ -300,7 +396,7 @@ for s_id, params in STRATEGY_INFO.items():
     elif stype.startswith("MINIROCKET"):
         desc = "AIS07 a AIS09: MiniRocket. Transforma ventanas de precio en ~10.000 features convolucionales. AIS07 usa clasificador binario. AIS08 usa Deep Learning de probabilidades. AIS09 es Stack XGBoost."
         inds = ["MiniRocket Transform", "AI / Deep Learning", "SPY Macro Crash Guard"]
-        pine_active = "//@version=5\n// MiniRocket no estǭ soportado nativamente en PineScript."
+        pine_active = "//@version=5\n// MiniRocket no está soportado nativamente en PineScript."
     elif stype == "MACRO_BASE_PURA":
         desc = "SS11: Estrategia de referencia pura. Opera Buy & Hold pasivo 100% del tiempo con la única salvedad de retirarse del mercado cuando ocurre un crash sistémico (Filtro Macro Global)."
         inds = ["Buy & Hold", "SPY Macro Crash Guard"]

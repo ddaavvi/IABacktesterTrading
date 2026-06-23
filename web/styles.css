@@ -958,6 +958,61 @@ tr:hover td {
     right: 24px;
 }
 
+/* ====== LIVE PRICES WIDGET (v0.3) ====== */
+.mini-price-watchlist {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.live-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.02);
+    font-size: 11px;
+    transition: background 0.3s ease;
+}
+.live-price-row:hover {
+    background: rgba(255,255,255,0.06);
+}
+.live-price-row.text-success {
+    border-left: 2px solid var(--color-success);
+}
+.live-price-row.text-danger {
+    border-left: 2px solid var(--color-danger);
+}
+.live-ticker {
+    font-weight: 700;
+    color: var(--text-main);
+    width: 50px;
+}
+.live-price {
+    font-family: var(--font-mono);
+    color: var(--text-main);
+}
+.live-change {
+    font-weight: 600;
+    font-size: 10px;
+}
+
+/* ====== ALERTS PANEL (v0.3) ====== */
+.alert-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 4px;
+    margin-bottom: 3px;
+    font-size: 11px;
+}
+.alert-item:hover {
+    background: rgba(255,255,255,0.06);
+}
+
 /* RESPONSIVENESS */
 @media(max-width: 1024px) {
     .app-container {

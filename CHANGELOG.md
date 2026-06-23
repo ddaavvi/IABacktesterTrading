@@ -2,6 +2,28 @@
 
 Todas las actualizaciones notables de este proyecto estarán documentadas en este archivo.
 
+## [0.3.0] - 2026-06-22
+### Añadido
+- **9 Nuevos Activos Europeos:** EWG (DE40/Germany), EWP (IBEX35/Spain), EWQ (CAC40/France), EWU (FTSE100/UK),
+  VGK (FTSE Europe), IEUR (MSCI Europe), EWL (Switzerland), ^VIX (Volatility), TLT (Treasuries).
+  Total: de 18 a 27 activos.
+- **Panel de Precios en Tiempo Real:** Widget en la sidebar con los 9 tickers clave, cambio % y colores.
+- **Sistema de Alertas:** Alertas de precio (superior/inferior) con persistencia en localStorage y notificaciones toast.
+- **Live Analysis API:** Nuevo endpoint `/api/live-analysis` que devuelve RSI, SMAs, tendencia y detección de spikes de volumen.
+- **Caché de Precios en Vivo:** Server-side cache de 30s para evitar rate-limiting de Yahoo Finance.
+- **Documentación Completa:** Docstrings en todas las funciones principales de `backtester.py`.
+
+### Modificado
+- **TICKERS expandido:** De 18 a 27 activos en `backtester.py`. Incluye `TICKER_DESCRIPTIONS` para los nuevos.
+- **README.md actualizado:** Documentación completa con tablas de activos, endpoints API y novedades v0.3.
+- **Filtro de tickers en Sidebar:** Ahora incluye las nuevas opciones europeas y de volatilidad.
+- **Server API:** Headers CORS añadidos, caché de 30s en `/api/live-prices`, mejor manejo de errores con yfinance multi-index.
+
+### Corregido
+- **Chart.js script tag:** Usaba `href` en lugar de `src` — corregido.
+- **MiniRocket Unicode:** `estǭ` corregido a `está` en la descripción de Pine Script.
+- **Manejo de errores multi-ticker:** Server ahora tolera fallos parciales en descarga de precios.
+
 ## [0.2.0] - 2026-06-19
 ### Añadido
 - **20 Estrategias Oficiales:** Reorganización del set de estrategias. Ahora se dividen en Simple Strategies (`SS01` a `SS11`) y Artificial Intelligence Strategies (`AIS01` a `AIS09`).
