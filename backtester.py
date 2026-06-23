@@ -50,8 +50,16 @@ TICKERS = [
     "GLD", "IVE",                         # Gold / Value
     "EWG", "EWP", "EWQ", "EWU",          # Europe country ETFs: DE, ES, FR, UK
     "VGK", "IEUR", "EWL",                # Europe broad / Switzerland
-    "^VIX", "TLT"                         # Volatility / Treasuries
+    "TLT"                                 # Treasuries
 ]
+
+# ^VIX is NOT investable (it's a volatility index derived from options, not a real asset).
+# It stays here for data download and benchmark reference only.
+# See REFERENCE_TICKERS below — strategies will NOT trade it.
+REFERENCE_TICKERS = ["^VIX"]
+
+# Complete data download list (tradable + reference)
+ALL_DATA_TICKERS = TICKERS + REFERENCE_TICKERS
 
 # Friendly names for the new tickers
 TICKER_DESCRIPTIONS = {
@@ -69,6 +77,8 @@ TICKER_DESCRIPTIONS = {
 START_DATE = "1996-01-01"
 END_DATE = datetime.today().strftime('%Y-%m-%d')
 
+# Benchmark and ranking will calculate for all tickers, but only TRADE_TICKERS are traded.
+
 # -------------------------------------------------------------------------
 # 1. Data Fetching
 # -------------------------------------------------------------------------
@@ -85,7 +95,7 @@ def fetch_data() -> Dict[str, pd.DataFrame]:
         RSI_14, ROC_3, ROC_5, Vol_SMA20, RelVol
     """
     data = {}
-    for ticker in TICKERS:
+    for ticker in ALL_DATA_TICKERS:
         cache_path = os.path.join(CACHE_DIR, f"{ticker}.csv")
         
         # Invalidate cache if it's older than specified seconds (default 60 for live price updates)
@@ -771,7 +781,7 @@ def run_all(commission=0.0, start_date=None, end_date=None):
         td     = all_results[s_id]
         avg_ret  = np.nanmean([d["metrics"]["total_return"] for d in td.values()])
         years_total = (data_dict["SPY"].index[-1] - data_dict["SPY"].index[0]).days / 365.25
-        avg_cagr = (((avg_ret / 100.0) + 1.0) ** (1.0 / years_total) - 1.0) * 100.0 if years_total > 0 else 0.0
+        avg_cagr = np.nanmean([d["metrics"]["cagr"] for d in td.values()]) if td else 0.0
         avg_sh   = np.nanmean([d["metrics"]["sharpe"]        for d in td.values()])
         avg_dd   = np.nanmean([d["metrics"]["max_drawdown"]  for d in td.values()])
         avg_wr   = np.nanmean([d["metrics"]["win_rate"]      for d in td.values()])
@@ -825,6 +835,7 @@ def run_all(commission=0.0, start_date=None, end_date=None):
             "start_date":            spy_idx[0].strftime("%Y-%m-%d") if len(spy_idx) > 0 else START_DATE,
             "end_date":              spy_idx[-1].strftime("%Y-%m-%d") if len(spy_idx) > 0 else END_DATE,
             "tickers":               TICKERS,
+            "reference_tickers":      REFERENCE_TICKERS,
             "num_strategies_tested": len(STRATEGY_INFO),
             "version":               "V10 - Subagent Supreme AI",
             "generated_at":          datetime.now().strftime("%Y-%m-%d %H:%M:%S")
