@@ -163,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderLiveWatchlist(prices) {
         if (!elLiveWatchlist) return;
         // Show a selection of key tickers sorted by change
-        const keyTickers = ["SPY", "QQQ", "DIA", "IWM", "EWG", "EWP", "VGK", "GLD", "^VIX"];
+        const keyTickers = ["SPY", "QQQ", "DIA", "IWM", "EWG", "EWP", "EWQ", "EWU", "VGK", "IEUR", "EWL", "GLD", "^VIX", "TLT"];
         const previousPrices = JSON.parse(sessionStorage.getItem("pineLabPrevPrices") || "{}");
         sessionStorage.setItem("pineLabPrevPrices", JSON.stringify(prices));
 
@@ -178,8 +178,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Friendly label
             const labels = {"SPY":"S&P500", "QQQ":"Nasdaq", "DIA":"Dow", "IWM":"Russell",
-                           "EWG":"DE40", "EWP":"IBEX35", "VGK":"Europe",
-                           "GLD":"Gold", "^VIX":"VIX"};
+                           "EWG":"DE40", "EWP":"IBEX35", "EWQ":"CAC40",
+                           "EWU":"FTSE100", "VGK":"Europe", "IEUR":"MSCI EU",
+                           "EWL":"Swiss", "GLD":"Gold", "^VIX":"VIX", "TLT":"Treasuries"};
             html += `<div class="live-price-row ${cls}">
                 <span class="live-ticker">${labels[tk] || tk}</span>
                 <span class="live-price">$${price.toFixed(2)}</span>
